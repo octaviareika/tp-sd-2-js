@@ -1,0 +1,93 @@
+# StatefulSet para os nós do cluster
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cluster-node
+spec:
+  serviceName: "cluster-node-service"  # Nome do serviço associado ao StatefulSet
+  replicas: 5  # Número de réplicas (um pod para cada nó no cluster)
+  selector:
+    matchLabels:
+      app: cluster-node
+  template:
+    metadata:
+      labels:
+        app: cluster-node
+    spec:
+      containers:
+      - name: cluster-node
+        image: ceciliaperet/node-js:latest  # Imagem dos nós do cluster
+        ports:
+        - containerPort: 6000  # Porta para comunicação entre os nós
+        - containerPort: 7000  # Porta para comunicação com os clientes
+        - containerPort: 7100  # Porta adicional para comunicação com clientes
+        env:
+        - name: NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name  # Pega o nome do pod (como cluster-node-0, cluster-node-1, etc.)
+      hostname: "$(POD_NAME)"  # O hostname de cada Pod será o seu nome
+      subdomain: "cluster-node-service"  # Nome do serviço headless
+---
+# Service para os nós do cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-node-service
+spec:
+  selector:
+    app: cluster-node
+  ports:
+    - name: token-port
+      protocol: TCP
+      port: 6000
+      targetPort: 6000
+    - name: client-receive-port
+      protocol: TCP
+      port: 7000
+      targetPort: 7000
+  clusterIP: None  # Sem IP atribuído, para serviços headless
+---
+# StatefulSet para os clientes
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: client-node
+spec:
+  serviceName: "client-service"  # Nome do serviço associado ao StatefulSet
+  replicas: 5  # Número de réplicas (um pod para cada cliente)
+  selector:
+    matchLabels:
+      app: client-node
+  template:
+    metadata:
+      labels:
+        app: client-node
+    spec:
+      containers:
+      - name: client-node
+        image: ceciliaperet/client-js:latest  # Imagem dos clientes
+        ports:
+        - containerPort: 7000  # Porta para comunicação com os nós do cluster
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name  # Pega o nome do pod (como client-node-0, client-node-1, etc.)
+      hostname: "$(POD_NAME)"  # O hostname de cada Pod será o seu nome
+      subdomain: "client-service"  # Nome do serviço headless
+---
+# Service para os clientes
+apiVersion: v1
+kind: Service
+metadata:
+  name: client-service
+spec:
+  selector:
+    app: client-node
+  ports:
+    - name: client-port
+      protocol: TCP
+      port: 7000
+      targetPort: 7000
+  clusterIP: None  # Sem IP atribuído, para serviços headless

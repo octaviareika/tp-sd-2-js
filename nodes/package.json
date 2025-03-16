@@ -1,0 +1,12 @@
+{
+    "name": "node_cluster",
+    "version": "1.0.0",
+    "description": "Node for Token Ring",
+    "main": "node_cluster.js",
+    "scripts": {
+      "start": "node node_cluster.js"
+    },
+    "dependencies": {
+      "zeromq": "^6.0.0"
+    }
+  }

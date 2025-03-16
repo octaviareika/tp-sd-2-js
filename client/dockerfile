@@ -1,0 +1,17 @@
+# Usa a imagem oficial do Node.js
+FROM node:16
+
+# Define o diretório de trabalho dentro do container
+WORKDIR /app
+
+# Copia o package.json e package-lock.json para o diretório de trabalho
+COPY package.json package-lock.json ./
+
+# Instala as dependências do Node.js
+RUN npm install
+
+# Copia o código para dentro do container
+COPY . .
+
+# Comando para executar o programa
+CMD ["node", "client.js"]
