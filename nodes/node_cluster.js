@@ -23,6 +23,7 @@ const CLIENT_SEND = `tcp://client-node-${NODE_ID}.client-service.default.svc.clu
 const receivedBuffer = [];
 const processedBuffer = [];
 
+// Função para receber a msg do cliente
 async function clientReceiverThread() {
     const sock = new zmq.Pull(); // serve para criar o socket
     await sock.bind(CLIENT_RECEIVE); // conecta com o cliente para receber o pedido do cliente
@@ -34,15 +35,17 @@ async function clientReceiverThread() {
     }
 }
 
+// Mandar msg para o cliente
 async function clientSenderThread() {
     const sock = new zmq.Push();
-    await sock.connect(CLIENT_SEND);
+    await sock.connect(CLIENT_SEND); // manda para o endereço do cliente, esse endereço é onde o cliente vai ouvir as msgs
 
     while (true) {
-        await sleep(5000);
+        await sleep(5000); // espera de 5 segundos 
         if (processedBuffer.length > 0) {
-            const msg = processedBuffer.shift();
-            await sock.send(JSON.stringify(msg));
+            // buffer pega a primeira msg em envia para o cliente e dps fica vazio
+            const msg = processedBuffer.shift(); // buffer ou acumulador, se nao tiver vazio a funcao remove a primeira msg do buffer
+            await sock.send(JSON.stringify(msg)); // converte em json e manda pro cliente 
             console.log(`[Nó ${NODE_ID}] Enviou resposta para o cliente: ${msg[0]}`);
         }
     }
@@ -50,21 +53,22 @@ async function clientSenderThread() {
 
 async function tokenReceiverThread() {
     await sleep(1000);
-    const sock = new zmq.Pull();
-    await sock.bind(MY_TOKEN_ADDR);
+    const sock = new zmq.Pull(); // token recebe msg dos remetentes
+    await sock.bind(MY_TOKEN_ADDR); // esse endereço é onde o nó está ouvindo para receber o token
 
-    for await (const [msg] of sock) {
-        let token = JSON.parse(msg.toString());
+    for await (const [msg] of sock) { // aguarda msg do socket 
+        let token = JSON.parse(msg.toString()); // processa o token
         console.log(`[Nó ${NODE_ID}] Recebeu token`);
         await sleep(Math.random() * 800 + 200);
 
-        if (token[NODE_ID][1] !== -1) {
+        // quando o cliente manda msg, esta é armazenada em um token que vai ser criado dependendo do numero de nós
+        if (token[NODE_ID][1] !== -1) { // se o token contem um pedido atual para o nó
             let isSmallest = token.every(entry => entry[1] === -1 || entry[1] >= token[NODE_ID][1]);
-            if (isSmallest) {
+            if (isSmallest) { // verifica qual nó tem o menor timestamp
                 console.log(`[Nó ${NODE_ID}] Entrando na zona crítica`);
                 
                 while (receivedBuffer.length > 0) {
-                    const request = receivedBuffer.shift();
+                    const request = receivedBuffer.shift(); // processa todos os pedidos do cliente no buffer recebido e armazena no receveid
                     processedBuffer.push(await requestProcessingThread(request));
                 }
                 
@@ -74,12 +78,13 @@ async function tokenReceiverThread() {
         }
         
         if (receivedBuffer.length > 0 && token[NODE_ID][1] === -1) {
-            token[NODE_ID] = receivedBuffer.shift();
+            token[NODE_ID] = receivedBuffer.shift(); // se o token atual nao tem nenhum pedido armazenado, o nó adiciona o novo pedido ao token
         }
         
-        const nextSock = new zmq.Push();
-        await nextSock.connect(NEXT_NODE);
-        await nextSock.send(JSON.stringify(token));
+        // passar o token para o próximo nó
+        const nextSock = new zmq.Push(); // cria um socket para enviar o token
+        await nextSock.connect(NEXT_NODE); // conecta ao endereço para o proximo no
+        await nextSock.send(JSON.stringify(token)); // O token é enviado para o próximo nó,
         console.log(`[Nó ${NODE_ID}] Enviou token para o próximo nó`);
     }
 }
@@ -108,7 +113,7 @@ async function requestProcessingThread(message) {
     await Promise.all([
         clientReceiverThread(),
         clientSenderThread(),
-        tokenReceiverThread(),
-        tokenCreatorThread()
+        tokenReceiverThread(), // Função que recebe e processa tokens de outros nós.
+        tokenCreatorThread() ///  Função que cria o token inicial
     ]);
 })();
